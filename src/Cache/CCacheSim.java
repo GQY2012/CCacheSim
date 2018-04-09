@@ -6,7 +6,14 @@ import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.awt.event.ItemEvent;
 import java.awt.event.ItemListener;
+import java.io.BufferedReader;
+import java.io.DataInputStream;
 import java.io.File;
+import java.io.FileInputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+
 import javax.swing.JButton;
 import javax.swing.JComboBox;
 import javax.swing.JFileChooser;
@@ -50,6 +57,8 @@ public class CCacheSim extends JFrame implements ActionListener{
 	
 	//其它变量定义
 	//...
+	private char instructionType;
+	private String instructionAddress;
 	
 	/*
 	 * 构造函数，绘制模拟器面板
@@ -78,7 +87,12 @@ public class CCacheSim extends JFrame implements ActionListener{
 				   String path = fileChoose.getSelectedFile().getAbsolutePath();
 				   fileAddrBtn.setText(path);
 				   file = new File(path);
-				   readFile();
+				   try {
+					readFile();
+				} catch (IOException e1) {
+					// TODO 自动生成的 catch 块
+					e1.printStackTrace();
+				}
 				   initCache();
 			}
 		}
@@ -100,8 +114,19 @@ public class CCacheSim extends JFrame implements ActionListener{
 	/*
 	 * 将指令和数据流从文件中读入
 	 */
-	public void readFile() {
-
+	public void readFile() throws IOException {
+	     InputStream f = new FileInputStream(file);
+		 DataInputStream in = new DataInputStream(f); 
+		 BufferedReader bf = new BufferedReader(new InputStreamReader(in));
+		 
+		 String rd;
+		 while((rd = bf.readLine()) != null) {
+		//	 System.out.println(rd);
+			 instructionType = rd.charAt(0);
+			 instructionAddress = rd.substring(2);
+			 System.out.println(instructionType);
+			 System.out.println(instructionAddress);
+		 }
 	}
 	
 	/*
