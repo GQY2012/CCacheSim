@@ -13,6 +13,7 @@ import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.util.ArrayList;
 
 import javax.swing.JButton;
 import javax.swing.JComboBox;
@@ -37,8 +38,14 @@ public class CCacheSim extends JFrame implements ActionListener{
 
     //参数定义
 	private String cachesize[] = { "2KB", "8KB", "32KB", "128KB", "512KB", "2MB" };
+	private int[] csize = { 2048, 8192, 32768, 131072, 524288, 2097152 };
+	
 	private String blocksize[] = { "16B", "32B", "64B", "128B", "256B" };
+	private int[] bsize = { 16, 32, 64, 128, 256 };
+	
 	private String way[] = { "直接映象", "2路", "4路", "8路", "16路", "32路" };
+	private int[] ways = { 0, 2, 4, 8, 16, 32};
+	
 	private String replace[] = { "LRU", "FIFO", "RAND" };
 	private String pref[] = { "不预取", "不命中预取" };
 	private String write[] = { "写回法", "写直达法" };
@@ -57,9 +64,20 @@ public class CCacheSim extends JFrame implements ActionListener{
 	
 	//其它变量定义
 	//...
+	private ArrayList<String> instruction = new ArrayList();  
 	private char instructionType;
 	private String instructionAddress;
-	
+	Cache cache;
+	private int readInstruction;//读指令次数
+	private int readData;		//读数据次数
+	private int writeData;		//写数据次数
+	private int readInstructionHit;//读指令命中
+	private int readInstructionMiss;//读指令不命中
+	private int readDataHit;//读数据命中
+	private int readDataMiss;//读数据不命中
+	private int writeDataHit;//写数据命中
+	private int writeDataMiss;//写数据不命中
+	private int time;//计时器
 	/*
 	 * 构造函数，绘制模拟器面板
 	 */
@@ -76,10 +94,13 @@ public class CCacheSim extends JFrame implements ActionListener{
 	public void actionPerformed(ActionEvent e){
 				
 		if (e.getSource() == execAllBtn) {
+			initCache();
 			simExecAll();
+			draw();
 		}
 		if (e.getSource() == execStepBtn) {
 			simExecStep();
+			draw();
 		}
 		if (e.getSource() == fileBotton){
 			int fileOver = fileChoose.showOpenDialog(null);
@@ -93,7 +114,7 @@ public class CCacheSim extends JFrame implements ActionListener{
 					// TODO 自动生成的 catch 块
 					e1.printStackTrace();
 				}
-				   initCache();
+				//   initCache();
 			}
 		}
 	}
@@ -102,13 +123,16 @@ public class CCacheSim extends JFrame implements ActionListener{
 	 * 初始化 Cache 模拟器
 	 */
 	public void initCache() {
-		csBox.setSelectedItem(cachesize[0]);
-		bsBox.setSelectedItem(blocksize[0]);
-		wayBox.setSelectedItem(way[0]);
-		replaceBox.setSelectedItem(replace[0]);
-		prefetchBox.setSelectedItem(pref[0]);
-		writeBox.setSelectedItem(write[0]);
-		allocBox.setSelectedItem(alloc[0]);
+		readInstruction = 0;//读指令次数
+		readData = 0;		//读数据次数
+		writeData = 0;		//写数据次数
+		readInstructionHit = 0;//读指令命中
+		readInstructionMiss = 0;//读指令不命中
+		readDataHit = 0;//读数据命中
+		readDataMiss = 0;//读数据不命中
+		writeDataHit = 0;//写数据命中
+		writeDataMiss = 0;//写数据不命中
+		cache = new Cache(csize[csIndex],bsize[bsIndex],ways[wayIndex]);
 	}
 	
 	/*
@@ -122,10 +146,11 @@ public class CCacheSim extends JFrame implements ActionListener{
 		 String rd;
 		 while((rd = bf.readLine()) != null) {
 		//	 System.out.println(rd);
-			 instructionType = rd.charAt(0);
-			 instructionAddress = rd.substring(2);
-			 System.out.println(instructionType);
-			 System.out.println(instructionAddress);
+			 instruction.add(rd);
+		//	 instructionType = rd.charAt(0);
+		//	 instructionAddress = rd.substring(2);
+		//	 System.out.println(instructionType);
+		//	 System.out.println(instructionAddress);		 
 		 }
 	}
 	
@@ -133,14 +158,34 @@ public class CCacheSim extends JFrame implements ActionListener{
 	 * 模拟单步执行
 	 */
 	public void simExecStep() {
-
+		
 	}
 	
 	/*
 	 * 模拟执行到底
 	 */
 	public void simExecAll() {
-
+		for(int i = 0;i < instruction.size();i++) {
+			instructionType = instruction.get(i).charAt(0);
+			instructionAddress = instruction.get(i).substring(2);
+			
+			if(instructionType == '0') {
+				readData++;//读数据
+				try {
+					int tag = instructionProcess.gettag(instructionAddress, cache.groupOffset);
+					int index = instructionProcess.getindex(instructionAddress,cache.groupNum);
+					if(!cache.read(tag,index)) {//读取失败
+						readDataMiss++;
+						cache.replace(tag, index, replaceIndex);//0:LRU,1:FIFO,2:Rand
+					}
+					else {
+						readDataHit++;
+					}
+				}catch(StringIndexOutOfBoundsException e) {
+					e.printStackTrace();
+				}
+			}
+		}
 	}
 
 	
@@ -289,16 +334,26 @@ public class CCacheSim extends JFrame implements ActionListener{
 		rightLabel = new JLabel("模拟结果");
 		rightLabel.setPreferredSize(new Dimension(500, 40));
 		results = new JLabel[4];
-		for (int i=0; i<4; i++) {
-			results[i] = new JLabel(rightLable[i] + "");
-			results[i].setPreferredSize(new Dimension(500, 40));
-		}
+		results[0] = new JLabel(rightLable[0] + readData);
+		results[0].setPreferredSize(new Dimension(500, 40));
+		
+		results[1] = new JLabel(rightLable[1] + readInstruction + "命中次数：" + readInstructionHit 
+				+ "不命中次数：" + readInstructionMiss);
+		results[1].setPreferredSize(new Dimension(500, 40));
+		
+		results[2] = new JLabel(rightLable[2] + readData + "命中次数：" + readDataHit 
+				+ "不命中次数：" + readDataMiss);
+		results[2].setPreferredSize(new Dimension(500, 40));
+		
+		results[3] = new JLabel(rightLable[3] + writeData + "命中次数：" + writeDataHit 
+				+ "不命中次数：" + writeDataMiss);
+		results[3].setPreferredSize(new Dimension(500, 40));
 		
 		stepLabel1 = new JLabel();
-		stepLabel1.setVisible(false);
+		stepLabel1.setVisible(true);
 		stepLabel1.setPreferredSize(new Dimension(500, 40));
 		stepLabel2 = new JLabel();
-		stepLabel2.setVisible(false);
+		stepLabel2.setVisible(true);
 		stepLabel2.setPreferredSize(new Dimension(500, 40));
 		
 		
