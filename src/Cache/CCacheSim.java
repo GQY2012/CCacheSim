@@ -13,6 +13,7 @@ import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.text.DecimalFormat;
 import java.util.ArrayList;
 
 import javax.swing.JButton;
@@ -29,7 +30,7 @@ public class CCacheSim extends JFrame implements ActionListener{
 	private JPanel panelTop, panelLeft, panelRight, panelBottom;
 	private JButton execStepBtn, execAllBtn, fileBotton;
 	private JComboBox csBox, bsBox, wayBox, replaceBox, prefetchBox, writeBox, allocBox;
-	private JFileChooser fileChoose = new JFileChooser();
+	private JFileChooser fileChoose;
 	
 	private JLabel labelTop,labelLeft,rightLabel,bottomLabel,fileLabel,fileAddrBtn, stepLabel1, stepLabel2,
 		    csLabel, bsLabel, wayLabel, replaceLabel, prefetchLabel, writeLabel, allocLabel;
@@ -44,7 +45,7 @@ public class CCacheSim extends JFrame implements ActionListener{
 	private int[] bsize = { 16, 32, 64, 128, 256 };
 	
 	private String way[] = { "直接映象", "2路", "4路", "8路", "16路", "32路" };
-	private int[] ways = { 0, 2, 4, 8, 16, 32};
+	private int[] ways = { 1, 2, 4, 8, 16, 32};
 	
 	private String replace[] = { "LRU", "FIFO", "RAND" };
 	private String pref[] = { "不预取", "不命中预取" };
@@ -64,25 +65,33 @@ public class CCacheSim extends JFrame implements ActionListener{
 	
 	//其它变量定义
 	//...
-	private ArrayList<String> instruction = new ArrayList();  
+	private ArrayList<String> instruction;  
 	private char instructionType;
 	private String instructionAddress;
 	Cache cache;
 	private int readInstruction;//读指令次数
 	private int readData;		//读数据次数
 	private int writeData;		//写数据次数
+	private int sum;			//总次数
 	private int readInstructionHit;//读指令命中
 	private int readInstructionMiss;//读指令不命中
 	private int readDataHit;//读数据命中
 	private int readDataMiss;//读数据不命中
 	private int writeDataHit;//写数据命中
 	private int writeDataMiss;//写数据不命中
-	private int time;//计时器
+	private int sumMiss;		//总不命中次数
+	private double readInstructionMissRate;//读指令不命中率
+	private double writeDataMissRate;//写数据不命中率
+	private double readDataMissRate;//读数据不命中率
+	private double missRate;//不命中率
+	private boolean isExecStep = false;
+	private int instructionStart;
 	/*
 	 * 构造函数，绘制模拟器面板
 	 */
 	public CCacheSim(){
 		super("Cache Simulator");
+		fileChoose = new JFileChooser();
 		draw();
 	}
 	
@@ -96,11 +105,14 @@ public class CCacheSim extends JFrame implements ActionListener{
 		if (e.getSource() == execAllBtn) {
 			initCache();
 			simExecAll();
-			draw();
+			consoleOutput();
+			refreshUI();
+			initCache();
 		}
 		if (e.getSource() == execStepBtn) {
 			simExecStep();
-			draw();
+			consoleOutput();
+			refreshUI();
 		}
 		if (e.getSource() == fileBotton){
 			int fileOver = fileChoose.showOpenDialog(null);
@@ -114,8 +126,8 @@ public class CCacheSim extends JFrame implements ActionListener{
 					// TODO 自动生成的 catch 块
 					e1.printStackTrace();
 				}
-				//   initCache();
 			}
+			initCache();
 		}
 	}
 	
@@ -126,12 +138,19 @@ public class CCacheSim extends JFrame implements ActionListener{
 		readInstruction = 0;//读指令次数
 		readData = 0;		//读数据次数
 		writeData = 0;		//写数据次数
+		sum = 0;			//总次数
 		readInstructionHit = 0;//读指令命中
 		readInstructionMiss = 0;//读指令不命中
 		readDataHit = 0;//读数据命中
 		readDataMiss = 0;//读数据不命中
 		writeDataHit = 0;//写数据命中
 		writeDataMiss = 0;//写数据不命中
+		sumMiss = 0;		//总不命中次数
+		readInstructionMissRate =  0.0;//读指令不命中率
+		writeDataMissRate = 0.0;//写数据不命中率
+		readDataMissRate = 0.0;//读数据不命中率
+		missRate = 0.0;//不命中率
+		instructionStart = 0;
 		cache = new Cache(csize[csIndex],bsize[bsIndex],ways[wayIndex]);
 	}
 	
@@ -142,15 +161,10 @@ public class CCacheSim extends JFrame implements ActionListener{
 	     InputStream f = new FileInputStream(file);
 		 DataInputStream in = new DataInputStream(f); 
 		 BufferedReader bf = new BufferedReader(new InputStreamReader(in));
-		 
+		 instruction = new ArrayList<String>();
 		 String rd;
 		 while((rd = bf.readLine()) != null) {
-		//	 System.out.println(rd);
-			 instruction.add(rd);
-		//	 instructionType = rd.charAt(0);
-		//	 instructionAddress = rd.substring(2);
-		//	 System.out.println(instructionType);
-		//	 System.out.println(instructionAddress);		 
+			 instruction.add(rd);		 
 		 }
 	}
 	
@@ -158,36 +172,120 @@ public class CCacheSim extends JFrame implements ActionListener{
 	 * 模拟单步执行
 	 */
 	public void simExecStep() {
-		
+		isExecStep = true;
+		simExecAll();
+		instructionStart++;
 	}
 	
 	/*
 	 * 模拟执行到底
 	 */
 	public void simExecAll() {
-		for(int i = 0;i < instruction.size();i++) {
+		int tag = 0;
+		int index = 0;
+		int instructionEnd = 0;
+		if(isExecStep) {//单步
+			if(instructionStart >= instruction.size())
+				return;
+			instructionEnd = instructionStart + 1;
+		}
+		else {
+			instructionEnd = instruction.size();
+		}
+		
+		for(int i = instructionStart;i < instructionEnd;i++) {
 			instructionType = instruction.get(i).charAt(0);
 			instructionAddress = instruction.get(i).substring(2);
-			
-			if(instructionType == '0') {
-				readData++;//读数据
-				try {
-					int tag = instructionProcess.gettag(instructionAddress, cache.groupOffset);
-					int index = instructionProcess.getindex(instructionAddress,cache.groupNum);
-					if(!cache.read(tag,index)) {//读取失败
+			try {
+				tag = instructionProcess.gettag(instructionAddress, 
+						cache.groupOffset,cache.blockOffset);
+				index = instructionProcess.getindex(instructionAddress,
+						cache.groupOffset,cache.blockOffset);
+			}catch(StringIndexOutOfBoundsException e) {
+				e.printStackTrace();
+			}
+			if(instructionType == '0') {//读数据
+				readData++;
+					if(!cache.read(tag,index)) {//读不命中
 						readDataMiss++;
-						cache.replace(tag, index, replaceIndex);//0:LRU,1:FIFO,2:Rand
+						cache.replace(tag, index, replaceIndex, writeIndex);//0:LRU,1:FIFO,2:Random
 					}
 					else {
 						readDataHit++;
 					}
-				}catch(StringIndexOutOfBoundsException e) {
-					e.printStackTrace();
+				}	
+			else if(instructionType == '1') {//写不命中
+				writeData++;
+					if(!cache.write(tag,index,writeIndex)) {//写失败
+						writeDataMiss++;
+						if(allocIndex == 0) {//写分配
+							cache.replace(tag, index, replaceIndex, writeIndex);
+							cache.write(tag,index,writeIndex);
+						}
+						else if(allocIndex == 1) {
+							
+						}
+					}
+					else {
+						writeDataHit++;
+					}
+				}
+			else if(instructionType == '2') {
+				readInstruction++;//读指令
+					if(!cache.read(tag,index)) {
+						readInstructionMiss++;
+						cache.replace(tag, index, replaceIndex, writeIndex);
+						if(prefetchIndex == 0) {//不预取
+							
+						}
+						else if(prefetchIndex == 1) {//预取
+							
+						}
+					}
+					else {
+						readInstructionHit++;
+					}
 				}
 			}
-		}
+		isExecStep = false;
+	}
+	
+	public void caculateMissRate() {
+		readInstructionMissRate = (double) readInstructionMiss/readInstruction;//读指令不命中率
+		writeDataMissRate = (double) writeDataMiss/writeData;//写数据不命中率
+		readDataMissRate = (double) readDataMiss/readData;//读数据不命中率
+		sum = readInstruction + writeData + readData;
+		sumMiss = readInstructionMiss + writeDataMiss + readDataMiss;
+		missRate = (double) sumMiss/sum;
 	}
 
+	public void consoleOutput() {
+		caculateMissRate();
+		DecimalFormat df = new DecimalFormat("0.00%");
+		System.out.println(rightLable[0] + sum + "总不命中次数" + sumMiss 
+				+ "总不命中率" + df.format(missRate));
+		System.out.println(rightLable[1] + readInstruction + "不命中次数：" + readInstructionMiss 
+				+ "不命中率：" + df.format(readInstructionMissRate));
+		System.out.println(rightLable[2] + readData + "不命中次数：" + readDataMiss 
+				+ "不命中率：" + df.format(readDataMissRate));
+		System.out.println(rightLable[3] + writeData + "不命中次数：" + writeDataMiss 
+				+ "不命中率：" + df.format(writeDataMissRate));
+	}
+	
+	public void refreshUI(){
+		DecimalFormat df = new DecimalFormat("0.00%");
+		results[0].setText(rightLable[0] + sum + "总不命中次数" + sumMiss 
+				+ "总不命中率" + df.format(missRate));
+		
+		results[1].setText(rightLable[1] + readInstruction + "不命中次数：" + readInstructionMiss 
+				+ "不命中率：" + df.format(readInstructionMissRate));
+		
+		results[2].setText(rightLable[2] + readData + "不命中次数：" + readDataMiss 
+				+ "不命中率：" + df.format(readDataMissRate));
+		
+		results[3].setText(rightLable[3] + writeData + "不命中次数：" + writeDataMiss 
+				+ "不命中率：" + df.format(writeDataMissRate));
+	}
 	
 	public static void main(String[] args) {
 		new CCacheSim();
@@ -334,26 +432,26 @@ public class CCacheSim extends JFrame implements ActionListener{
 		rightLabel = new JLabel("模拟结果");
 		rightLabel.setPreferredSize(new Dimension(500, 40));
 		results = new JLabel[4];
-		results[0] = new JLabel(rightLable[0] + readData);
+		results[0] = new JLabel(rightLable[0] + sum + "总不命中次数" + sumMiss + "总不命中率" + missRate);
 		results[0].setPreferredSize(new Dimension(500, 40));
 		
-		results[1] = new JLabel(rightLable[1] + readInstruction + "命中次数：" + readInstructionHit 
-				+ "不命中次数：" + readInstructionMiss);
+		results[1] = new JLabel(rightLable[1] + readInstruction + "不命中次数：" + readInstructionMiss 
+				+ "不命中率：" + readInstructionMissRate);
 		results[1].setPreferredSize(new Dimension(500, 40));
 		
-		results[2] = new JLabel(rightLable[2] + readData + "命中次数：" + readDataHit 
-				+ "不命中次数：" + readDataMiss);
+		results[2] = new JLabel(rightLable[2] + readData + "不命中次数：" + readDataMiss 
+				+ "不命中率：" + readDataMissRate);
 		results[2].setPreferredSize(new Dimension(500, 40));
 		
-		results[3] = new JLabel(rightLable[3] + writeData + "命中次数：" + writeDataHit 
-				+ "不命中次数：" + writeDataMiss);
+		results[3] = new JLabel(rightLable[3] + writeData + "不命中次数：" + writeDataMiss 
+				+ "不命中率：" + writeDataMissRate);
 		results[3].setPreferredSize(new Dimension(500, 40));
 		
 		stepLabel1 = new JLabel();
-		stepLabel1.setVisible(true);
+		stepLabel1.setVisible(false);
 		stepLabel1.setPreferredSize(new Dimension(500, 40));
 		stepLabel2 = new JLabel();
-		stepLabel2.setVisible(true);
+		stepLabel2.setVisible(false);
 		stepLabel2.setPreferredSize(new Dimension(500, 40));
 		
 		
@@ -364,7 +462,7 @@ public class CCacheSim extends JFrame implements ActionListener{
 		
 		panelRight.add(stepLabel1);
 		panelRight.add(stepLabel2);
-
+		
 
 		//*****************************底部面板绘制*****************************************//
 		

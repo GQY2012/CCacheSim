@@ -1,86 +1,136 @@
 package Cache;
 
 public class Cache {
-	public CacheBlock[][] Cache;//一维坐标：组号，二维坐标：组内块号
+	public CacheBlock[][] Cache;//一维坐标：组号index,二维坐标：组内块号blockOffset
 	
 	public int cacheSize;//cache大小
 	public int blockSize;//块大小
+	
 	public int blockNum;//块数量
 	public int groupNum;//组数量
 	public int blockNumInAGroup;//组内块数量
-	public int groupOffset;//组寻址占地址位数
-	public int blockOffset;//块寻址占地址位数
+	
+	public int groupOffset;//组号占地址位数
+	public int blockOffset;//块号占地址位数
+	
+	public long[] inCacheTime;
+	/**
+	 * 主存地址分段为：
+	 * tag groupOffset blockOffset
+	 * cache地址分段位：
+	 * tag index blockOffset
+	 */
 	
 	public Cache(int csize,int bsize, int way) {
 		cacheSize = csize;
 		blockSize = bsize;
-		
-	//	System.out.println("cs" + cacheSize);
-	//	System.out.println("bs" + blockSize);
-		
 	    blockNum = cacheSize/blockSize;
-		blockOffset = (int) (Math.log(blockNum)/Math.log(2.0));
+		blockOffset = (int) (Math.log(blockSize)/Math.log(2.0));
 		
-	//	System.out.println("bN" + blockNum);
-	//	System.out.println("bF" + blockOffset);
-		
-		if(way == 0) {//直接映射
-			groupNum = blockNum;
-		}
-		else
-			groupNum = way;//组相联
-		blockNumInAGroup = blockNum / groupNum;  
+		blockNumInAGroup = way;  
+		groupNum = blockNum/blockNumInAGroup;
         groupOffset = (int) (Math.log(groupNum)/Math.log(2.0));
-        
-     // System.out.println("gN" + groupNum);
-     // System.out.println("bNg" + blockNumInAGroup);
-	//	System.out.println("gF" + groupOffset);
-        
+        /*
+        System.out.println("cs" + cacheSize);
+		System.out.println("bs" + blockSize);
+		System.out.println("bN" + blockNum);
+        System.out.println("gN" + groupNum);
+        System.out.println("bNg" + blockNumInAGroup);
+		System.out.println("gF" + groupOffset);
+		System.out.println("bF" + blockOffset);
+        */
         Cache = new CacheBlock[groupNum][blockNumInAGroup];
         for (int i = 0; i < groupNum; i++) {  
             for (int j = 0; j < blockNumInAGroup; j++) {  
-                Cache[i][j] = new CacheBlock(-1);  
+                Cache[i][j] = new CacheBlock(-1,j);  
             }  
         }  
+        
+        inCacheTime = new long[groupNum];
         
 	}
 	
 	public boolean read(int tag,int index) {
 		for(int i = 0;i < blockNumInAGroup;i++) {
-			if(Cache[index][i].tag == tag && Cache[index][i].validbit == true) {
-				Cache[index][i].count++;
+			if(Cache[index][i].tag == tag /*&& Cache[index][i].validbit == true*/) {
+				int t = Cache[index][i].LRUindex;
+				for(int j = 0; j < blockNumInAGroup; j++)
+					if(Cache[index][j].LRUindex > t)
+						Cache[index][j].LRUindex--;
+				Cache[index][i].LRUindex = blockNumInAGroup - 1;
 				return true;
 			}
 		}
 		return false;
 	}
 	
-	public boolean write(int tag,int index) {
+	public boolean write(int tag,int index,int writeType) {
+		for(int i = 0;i < blockNumInAGroup;i++) {
+			if(Cache[index][i].tag == tag /*&& Cache[index][i].validbit == true*/) {
+				Cache[index][i].dirtybit = true;
+				int t = Cache[index][i].LRUindex;
+				for(int j = 0; j < blockNumInAGroup; j++)
+					if(Cache[index][j].LRUindex > t)
+						Cache[index][j].LRUindex--;
+				Cache[index][i].LRUindex = blockNumInAGroup - 1;
+				
+				if(writeType == 0) {//写回
+					
+				}
+				else if(writeType == 1) {//写直达
+					Cache[index][i].dirtybit = false;
+				}
+				return true;
+			}
+				
+		}
 		return false;
 	}
 	
-	public void replace(int tag,int index,int replacetype) {
-		if(replacetype == 0) {//LRU
-			
+	public void replace(int tag,int index,int replaceType,int writeType) {
+		if(replaceType == 0) {//LRU
+			int blockIndex = 0;  
+            for (int i = 0; i < blockNumInAGroup; i++)  { 
+            	if(Cache[index][i].LRUindex == 0) {
+            		blockIndex = i; 
+            		break;
+            	}
+            }
+        	Cache[index][blockIndex].LRUindex = blockNumInAGroup;
+        	for (int i = 0; i < blockNumInAGroup; i++) { 
+        		Cache[index][i].LRUindex--;
+        	}
+            loadtoCache(tag, index, blockIndex, writeType); 
 		}
-		else if(replacetype == 1) {//FIFO
-			
+		else if(replaceType == 1) {//FIFO
+			int blockIndex = 0;  
+            for (int i = 1; i < blockNumInAGroup; i++) {  
+                if (Cache[index][blockIndex].time > Cache[index][i].time) {  
+                	blockIndex = i;  
+                }  
+            }  
+            loadtoCache(tag, index, blockIndex,writeType);  
 		}
-		else {//Rand
-			int randblockNumInAGroup = (int) Math.random()*blockNumInAGroup;
-			loadtoCache(tag,index,randblockNumInAGroup);
+		else if(replaceType == 2){//Random
+			int randblockAdress = (int) (Math.random()*blockNumInAGroup);
+			loadtoCache(tag,index,randblockAdress,writeType);
 		}
 	}
 	
-	public void loadtoCache(int tag,int index,int blockindex) {
+	public void loadtoCache(int tag,int index,int blockindex,int writeType) {
+		if (writeType == 0 && Cache[index][blockindex].dirtybit) { //写回法替换 
+
+		} 
+		
 		Cache[index][blockindex].tag = tag;
 		Cache[index][blockindex].validbit = true;
-		Cache[index][blockindex].dirtybit = true;
+		Cache[index][blockindex].dirtybit = false;
+		Cache[index][blockindex].time = inCacheTime[index];  
+		inCacheTime[index]++;
 	}
 	
 	public static void main(String args[]) {
-		Cache cache = new Cache(2048,16,2);
-		System.out.println((int) Math.random()*cache.blockNumInAGroup);
+		Cache cache = new Cache(2048,16,4);
 	}
 	
 }

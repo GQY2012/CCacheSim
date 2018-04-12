@@ -1,25 +1,19 @@
 package Cache;
 
 public class CacheBlock {
-	public int blockAddress;
-//	public int blockindex;//索引
 	public long tag;//标记
 	public boolean validbit;//有效位
 	public boolean dirtybit;//脏位
-	public int count;//LRU访问次数
-	public int time;//块入cache事件
+	public int LRUindex;//LRU需要的访问时间排位
+	public long time;//FIFO需要的块入cache时间
 	
-	
-	public CacheBlock(int tag) {  
+	public CacheBlock(int tag,int LRUindex) {  
         this.tag = tag;  
         dirtybit = false;  
-        count = 0;  
-        time = -1;  
+        time = -1;
+        this.LRUindex = LRUindex;
     }  
-	
-	public void setblockAddress(String instructionAddress,int blocksize) {
-		this.blockAddress = Integer.parseInt(instructionAddress,16)/blocksize;
-	}
+
 	
 	
 }
