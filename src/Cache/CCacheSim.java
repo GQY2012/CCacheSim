@@ -184,13 +184,17 @@ public class CCacheSim extends JFrame implements ActionListener{
 		int tag = 0;
 		int index = 0;
 		int instructionEnd = 0;
-		if(isExecStep) {//单步
-			if(instructionStart >= instruction.size())
-				return;
-			instructionEnd = instructionStart + 1;
-		}
-		else {
-			instructionEnd = instruction.size();
+		try {
+			if(isExecStep) {//单步
+				if(instructionStart >= instruction.size())
+					return;
+				instructionEnd = instructionStart + 1;
+			}
+			else {
+				instructionEnd = instruction.size();
+			}
+		}catch(NullPointerException e) {
+			e.printStackTrace();
 		}
 		
 		for(int i = instructionStart;i < instructionEnd;i++) {
@@ -209,6 +213,18 @@ public class CCacheSim extends JFrame implements ActionListener{
 					if(!cache.read(tag,index)) {//读不命中
 						readDataMiss++;
 						cache.replace(tag, index, replaceIndex, writeIndex);//0:LRU,1:FIFO,2:Random
+						if(prefetchIndex == 0) {//不预取
+							
+						}
+						else if(prefetchIndex == 1) {//预取
+							readData++;
+							if(!cache.prefetch(tag, index, replaceIndex, writeIndex)) {
+								readDataMiss++;
+							}
+							else {
+								readDataHit++;
+							}
+						}
 					}
 					else {
 						readDataHit++;
@@ -239,7 +255,13 @@ public class CCacheSim extends JFrame implements ActionListener{
 							
 						}
 						else if(prefetchIndex == 1) {//预取
-							
+							readInstruction++;
+							if(!cache.prefetch(tag, index, replaceIndex, writeIndex)) {
+								readInstructionMiss++;
+							}
+							else {
+								readInstructionHit++;
+							}
 						}
 					}
 					else {

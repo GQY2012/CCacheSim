@@ -87,6 +87,26 @@ public class Cache {
 		return false;
 	}
 	
+	public boolean prefetch(int tag,int index,int replaceType,int writeType) {
+		if(index == Math.pow(2,groupOffset) - 1) {
+			index = 0;
+			if(tag == Math.pow(2,32 - groupOffset - blockOffset) - 1) {
+				tag = 0;
+			}
+			else {
+				tag++;
+			}
+		}
+		else {
+			index++;
+		}
+		boolean isHit = read(tag,index);
+		if(!isHit)
+			replace(tag,index,replaceType,writeType);
+		
+		return isHit;
+	}
+	
 	public void replace(int tag,int index,int replaceType,int writeType) {
 		if(replaceType == 0) {//LRU
 			int blockIndex = 0;  
@@ -112,8 +132,8 @@ public class Cache {
             loadtoCache(tag, index, blockIndex,writeType);  
 		}
 		else if(replaceType == 2){//Random
-			int randblockAdress = (int) (Math.random()*blockNumInAGroup);
-			loadtoCache(tag,index,randblockAdress,writeType);
+			int randBlockIndex = (int) (Math.random()*blockNumInAGroup);
+			loadtoCache(tag,index,randBlockIndex,writeType);
 		}
 	}
 	
