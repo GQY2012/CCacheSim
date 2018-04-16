@@ -13,7 +13,7 @@ public class Cache {
 	public int groupOffset;//组号占地址位数
 	public int blockOffset;//块号占地址位数
 	
-	public long[] inCacheTime;
+	public long[] inCacheTime;//FIFO需要的计时器
 	/**
 	 * 主存地址分段为：
 	 * tag groupOffset blockOffset
@@ -22,7 +22,7 @@ public class Cache {
 	 */
 	
 	public Cache(int csize,int bsize, int way) {
-		cacheSize = csize;
+	    cacheSize = csize;
 		blockSize = bsize;
 	    blockNum = cacheSize/blockSize;
 		blockOffset = (int) (Math.log(blockSize)/Math.log(2.0));
@@ -30,15 +30,7 @@ public class Cache {
 		blockNumInAGroup = way;  
 		groupNum = blockNum/blockNumInAGroup;
         groupOffset = (int) (Math.log(groupNum)/Math.log(2.0));
-        /*
-        System.out.println("cs" + cacheSize);
-		System.out.println("bs" + blockSize);
-		System.out.println("bN" + blockNum);
-        System.out.println("gN" + groupNum);
-        System.out.println("bNg" + blockNumInAGroup);
-		System.out.println("gF" + groupOffset);
-		System.out.println("bF" + blockOffset);
-        */
+
         Cache = new CacheBlock[groupNum][blockNumInAGroup];
         for (int i = 0; i < groupNum; i++) {  
             for (int j = 0; j < blockNumInAGroup; j++) {  

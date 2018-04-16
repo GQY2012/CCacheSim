@@ -12,8 +12,5 @@ public class CacheBlock {
         dirtybit = false;  
         time = -1;
         this.LRUindex = LRUindex;
-    }  
-
-	
-	
+    }  	
 }
